@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>St. Jude's Thoracic Institute — Interactive Anatomy Escape Room</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #090d11;
+      color: #e2e8f0;
+      overflow-x: hidden;
+    }
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Smooth view transitions */
+    .screen-fade {
+      animation: fadeIn 0.35s ease-out forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* Pulse effect for low vitals or low timer */
+    @keyframes pulseAlert {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.55; }
+    }
+    .pulse-danger {
+      animation: pulseAlert 1.2s infinite;
+    }
+    /* Custom scrollbar for dark hospital theme */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-teal-500/30 selection:text-teal-200">
+
+  <!-- Hidden Audio Elements referencing the exact assets folder filenames -->
+  <audio id="audio-bgm" src="assets/background_music.mp3" loop preload="auto"></audio>
+  <audio id="audio-correct" src="assets/correct.mp3" preload="auto"></audio>
+  <audio id="audio-incorrect" src="assets/incorrect.mp3" preload="auto"></audio>
+  <audio id="audio-doc" src="assets/document_found.mp3" preload="auto"></audio>
+  <audio id="audio-unlock" src="assets/door_unlock.mp3" preload="auto"></audio>
+
+  <!-- Persistent Top HUD (Hidden on Start Screen, visible during gameplay) -->
+  <header id="game-hud" class="hidden sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/90 shadow-lg">
+    <div class="max-w-6xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+      
+      <!-- Brand / Wing Title -->
+      <div class="flex items-center gap-2.5">
+        <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/15 border border-teal-500/40 text-teal-400 font-bold text-sm">
+          +
+        </span>
+        <div>
+          <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold">St. Jude's Thoracic Institute</p>
+          <p id="hud-location" class="text-xs sm:text-sm font-bold text-slate-100">Quarantine Wing Map</p>
+        </div>
+      </div>
+
+      <!-- Status Metrics: Timer, Life Points, Progress, Audio -->
+      <div class="flex items-center gap-2 sm:gap-4 flex-wrap">
+        
+        <!-- 20-Minute Countdown Timer -->
+        <div id="timer-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80">
+          <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span class="text-xs text-slate-400 hidden sm:inline">Time:</span>
+          <span id="hud-timer" class="font-mono-code font-bold text-sm sm:text-base text-amber-300" aria-live="polite">20:00</span>
+        </div>
+
+        <!-- 100 Life Points -->
+        <div id="life-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80">
+          <svg class="w-4 h-4 text-rose-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/>
+          </svg>
+          <span class="text-xs text-slate-400 hidden sm:inline">Vitals:</span>
+          <span id="hud-life" class="font-mono-code font-bold text-sm sm:text-base text-emerald-400" aria-live="polite">100 HP</span>
+        </div>
+
+        <!-- Visual Progress Indicator -->
+        <div class="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80" title="Room Completion Progress">
+          <span class="text-xs text-slate-400 mr-1">Progress:</span>
+          <span id="prog-dot-1" class="w-3 h-3 rounded-full bg-slate-700 border border-slate-600 transition-colors" title="Room 1"></span>
+          <span id="prog-dot-2" class="w-3 h-3 rounded-full bg-slate-700 border border-slate-600 transition-colors" title="Room 2"></span>
+          <span id="prog-dot-3" class="w-3 h-3 rounded-full bg-slate-700 border border-slate-600 transition-colors" title="Room 3"></span>
+        </div>
+
+        <!-- Mute / Unmute Toggle Button -->
+        <button id="btn-mute-toggle" type="button" onclick="toggleAudioMute()"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs sm:text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-teal-400"
+          aria-label="Toggle Background Music and Sound Effects">
+          <span id="mute-icon">🔊</span>
+          <span id="mute-label" class="hidden sm:inline">Audio On</span>
+        </button>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Non-blocking Toast / Notification Banner (Accessible equivalent for audio cues) -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0" aria-live="assertive"></div>
+
+  <!-- Main Content Container -->
+  <main class="flex-grow flex flex-col">
+
+    <!-- =====================================================================
+         SCREEN 1: START SCREEN
+         ===================================================================== -->
+    <section id="screen-start" class="relative flex-grow flex items-center justify-center min-h-screen p-4 sm:p-8 bg-slate-950">
+      <!-- Background Image: cover.png -->
+      <img src="assets/cover.png" alt="Abandoned St. Jude's Thoracic Institute at night"
+           onerror="this.style.display='none'"
+           class="absolute inset-0 w-full h-full object-cover object-center opacity-45">
+      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/75 to-slate-900/60"></div>
+
+      <!-- Top-Right Audio Control on Start Screen -->
+      <div class="absolute top-4 right-4 z-20">
+        <button type="button" onclick="toggleAudioMute()"
+          class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/85 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs sm:text-sm font-medium backdrop-blur-md transition">
+          <span class="mute-icon-sync">🔊</span>
+          <span class="mute-label-sync">Audio Ready</span>
+        </button>
+      </div>
+
+      <!-- Start Card -->
+      <div class="relative z-10 max-w-2xl w-full bg-slate-900/85 backdrop-blur-md border border-slate-700/80 rounded-3xl p-6 sm:p-10 shadow-2xl text-center screen-fade">
+        <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold uppercase tracking-widest mb-4">
+          <span>Quarantine Lockdown • Wing B</span>
+        </div>
+        <h1 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">
+          St. Jude’s Thoracic Institute
+        </h1>
+        <p class="text-base sm:text-lg text-slate-300 leading-relaxed mb-6">
+          Decades ago, the cardiothoracic wing of St. Jude’s Hospital was abruptly sealed under emergency quarantine. Now, the heavy blast doors have locked behind you.
+        </p>
+        <p class="text-sm sm:text-base text-slate-400 leading-relaxed mb-8">
+          To escape through the sealed <strong class="text-teal-300">Cardiothoracic Operating Theatre</strong>, you must navigate the abandoned wards, solve clinical thorax anatomy challenges, and reconstruct the Chief Surgeon’s torn access document before your oxygen and vitals fail.
+        </p>
+
+        <button id="btn-start-game" type="button" onclick="goToInstructions()"
+          class="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-bold text-lg shadow-lg shadow-teal-900/40 transition transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-teal-500/50">
+          <span>Start Mission</span>
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SCREEN 2: INSTRUCTIONS SCREEN
+         ===================================================================== -->
+    <section id="screen-instructions" class="hidden flex-grow flex items-center justify-center p-4 sm:p-8 bg-slate-950">
+      <div class="max-w-3xl w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl screen-fade">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-500/40 flex items-center justify-center text-teal-400 font-bold text-lg">
+            i
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wider text-teal-400 font-semibold">Emergency Briefing</p>
+            <h2 class="text-2xl sm:text-3xl font-bold text-white">How to Escape the Institute</h2>
+          </div>
+        </div>
+
+        <p class="text-slate-300 text-sm sm:text-base leading-relaxed mb-6">
+          Your anatomical knowledge of the <strong class="text-white">thoracic wall, mediastinum, and cardiopulmonary circulation</strong> is the key to unlocking the hospital’s emergency exit systems.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <!-- Three-Room Structure -->
+          <div class="p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+            <h3 class="text-teal-300 font-bold text-sm uppercase tracking-wide mb-2">1. Three-Room Progression</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              <strong>Room 1</strong> (Radiology &amp; Osteology Archive) and <strong>Room 2</strong> (Cardiopulmonary Ward) are open immediately and can be explored in <strong>either order</strong>. <strong>Room 3</strong> (Operating Theatre) remains locked until you enter the 4-digit access code.
+            </p>
+          </div>
+
+          <!-- Fragment Reconstruction -->
+          <div class="p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+            <h3 class="text-amber-300 font-bold text-sm uppercase tracking-wide mb-2">2. Document Fragments</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              Completing Room 1 reveals the <strong>first torn fragment</strong>; completing Room 2 reveals the <strong>second torn fragment</strong>. Once both are collected on the Map screen, join them to read the 4-digit access code.
+            </p>
+          </div>
+
+          <!-- Timer & Vitals -->
+          <div class="p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+            <h3 class="text-rose-300 font-bold text-sm uppercase tracking-wide mb-2">3. Timer &amp; Life Points</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              You have <strong>20 minutes</strong> and <strong>100 Life Points (HP)</strong>. Every incorrect submission deducts <strong>10 HP</strong>. If your timer hits 00:00 or your HP drops to 0, the quarantine lockdown becomes permanent.
+            </p>
+          </div>
+
+          <!-- Hints & Feedback -->
+          <div class="p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+            <h3 class="text-sky-300 font-bold text-sm uppercase tracking-wide mb-2">4. Clinical Hints &amp; Feedback</h3>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              Each diagnostic terminal provides immediate educational feedback after every attempt, plus an optional <strong>Clinical Hint</strong> button if you need an anatomical clue without losing points.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-800">
+          <span class="text-xs text-slate-400">Timer begins as soon as you enter the Quarantine Wing Map.</span>
+          <button type="button" onclick="startGameplay()"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-base shadow-lg transition focus:outline-none focus:ring-4 focus:ring-teal-500/50">
+            <span>Continue to Hospital Map</span>
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SCREEN 3: NAVIGATION MAP & DOCUMENT RECONSTRUCTION
+         ===================================================================== -->
+    <section id="screen-map" class="hidden flex-grow p-4 sm:p-8 max-w-6xl mx-auto w-full screen-fade">
+      
+      <!-- Map Header & Overall Progress Bar -->
+      <div class="mb-6 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-bold text-white">Quarantine Wing Navigation Map</h2>
+            <p class="text-sm text-slate-400">Explore Room 1 and Room 2 in any order to recover both halves of the Chief Surgeon's access document.</p>
+          </div>
+          <div class="text-right">
+            <span id="map-progress-text" class="text-xs font-semibold uppercase tracking-wider text-teal-400">0 of 3 Rooms Cleared</span>
+          </div>
+        </div>
+        <!-- Progress Bar -->
+        <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+          <div id="map-progress-bar" class="h-full bg-gradient-to-r from-teal-500 to-emerald-400 transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Three Interactive Room Cards -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
+        
+        <!-- ROOM 1 CARD -->
+        <div id="card-room-1" class="flex flex-col justify-between bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition hover:border-teal-500/50">
+          <div>
+            <div class="relative h-40 bg-slate-800 overflow-hidden">
+              <img src="assets/room1.png" alt="Radiology and Osteology Archive" onerror="this.style.display='none'" class="w-full h-full object-cover opacity-75">
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/30 to-transparent"></div>
+              <span id="badge-room-1" class="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-teal-500/20 border border-teal-400/40 text-teal-300 backdrop-blur-sm">
+                Accessible
+              </span>
+              <div class="absolute bottom-3 left-4">
+                <p class="text-xs font-bold uppercase tracking-wider text-teal-400">Room 01</p>
+                <h3 class="text-lg font-bold text-white">Radiology &amp; Osteology Archive</h3>
+              </div>
+            </div>
+            <div class="p-4">
+              <p class="text-sm text-slate-300 leading-relaxed mb-3">
+                Examine thoracic wall X-rays, sternal angle landmarks, and respiratory mechanics to unlock the steel filing cabinet.
+              </p>
+              <div class="flex items-center gap-2 text-xs text-slate-400">
+                <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">2 Challenges</span>
+                <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">Reward: Fragment 1</span>
+              </div>
+            </div>
+          </div>
+          <div class="p-4 pt-0">
+            <button id="btn-enter-room-1" type="button" onclick="enterRoom(1)"
+              class="w-full py-3 px-4 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-sm transition focus:outline-none focus:ring-2 focus:ring-teal-400">
+              Enter Room 1
+            </button>
+          </div>
+        </div>
+
+        <!-- ROOM 2 CARD -->
+        <div id="card-room-2" class="flex flex-col justify-between bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition hover:border-teal-500/50">
+          <div>
+            <div class="relative h-40 bg-slate-800 overflow-hidden">
+              <img src="assets/room2.png" alt="Cardiopulmonary Ward" onerror="this.style.display='none'" class="w-full h-full object-cover opacity-75">
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/30 to-transparent"></div>
+              <span id="badge-room-2" class="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-teal-500/20 border border-teal-400/40 text-teal-300 backdrop-blur-sm">
+                Accessible
+              </span>
+              <div class="absolute bottom-3 left-4">
+                <p class="text-xs font-bold uppercase tracking-wider text-teal-400">Room 02</p>
+                <h3 class="text-lg font-bold text-white">Cardiopulmonary Ward</h3>
+              </div>
+            </div>
+            <div class="p-4">
+              <p class="text-sm text-slate-300 leading-relaxed mb-3">
+                Trace pulmonary circulation pathways and identify mediastinal neurovasculature to open the medical chart box.
+              </p>
+              <div class="flex items-center gap-2 text-xs text-slate-400">
+                <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">2 Challenges</span>
+                <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">Reward: Fragment 2</span>
+              </div>
+            </div>
+          </div>
+          <div class="p-4 pt-0">
+            <button id="btn-enter-room-2" type="button" onclick="enterRoom(2)"
+              class="w-full py-3 px-4 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-sm transition focus:outline-none focus:ring-2 focus:ring-teal-400">
+              Enter Room 2
+            </button>
+          </div>
+        </div>
+
+        <!-- ROOM 3 CARD (Initially Locked) -->
+        <div id="card-room-3" class="flex flex-col justify-between bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition">
+          <div>
+            <div class="relative h-40 bg-slate-800 overflow-hidden">
+              <img src="assets/room3.png" alt="Cardiothoracic Operating Theatre" onerror="this.style.display='none'" class="w-full h-full object-cover opacity-50">
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent"></div>
+              <span id="badge-room-3" class="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/20 border border-rose-500/40 text-rose-300 backdrop-blur-sm">
+                🔒 Locked
+              </span>
+              <div class="absolute bottom-3 left-4">
+                <p class="text-xs font-bold uppercase tracking-wider text-amber-400">Room 03 • Final Exit</p>
+                <h3 class="text-lg font-bold text-white">Cardiothoracic Operating Theatre</h3>
+              </div>
+            </div>
+            <div class="p-4">
+              <p class="text-sm text-slate-300 leading-relaxed mb-3">
+                Sealed behind a 4-digit security keypad. Reconstruct both document fragments below to uncover the unlock code.
+              </p>
+              <div class="flex items-center gap-2 text-xs text-slate-400">
+                <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">Final Challenge</span>
+                <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">Master Exit</span>
+              </div>
+            </div>
+          </div>
+          <div class="p-4 pt-0">
+            <button id="btn-enter-room-3" type="button" onclick="enterRoom(3)" disabled
+              class="w-full py-3 px-4 rounded-xl bg-slate-800 text-slate-500 border border-slate-700 font-semibold text-sm cursor-not-allowed transition">
+              Locked — Requires 4-Digit Code
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ===================================================================
+           DOCUMENT RECONSTRUCTION & 4-DIGIT KEYPAD WORKBENCH
+           =================================================================== -->
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-8 shadow-xl">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-6 border-b border-slate-800">
+          <div>
+            <h3 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+              <span>Evidence Desk: Torn Access Document</span>
+            </h3>
+            <p class="text-xs sm:text-sm text-slate-400">Collect both fragments from Rooms 1 and 2 to join the torn edges and reveal the Room 3 keypad code.</p>
+          </div>
+          <span id="fragment-count-badge" class="self-start sm:self-auto px-3 py-1 rounded-full text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300">
+            0 / 2 Fragments Collected
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          
+          <!-- Left 7 Cols: Fragment Display / Reconstruction Area -->
+          <div class="lg:col-span-7">
+            <!-- State A: Neither or only one fragment collected -->
+            <div id="fragments-incomplete-view" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <!-- Fragment 1 Slot -->
+              <div id="slot-frag-1" class="rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950/60 p-4 flex flex-col items-center justify-center min-h-[180px] text-center">
+                <div id="frag-1-empty">
+                  <p class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Left Fragment</p>
+                  <p class="text-sm text-slate-400">Complete Room 1 to recover</p>
+                </div>
+                <div id="frag-1-filled" class="hidden w-full">
+                  <p class="text-xs font-bold uppercase tracking-wider text-teal-400 mb-2">Fragment 1 Recovered</p>
+                  <img src="assets/fragment1.png" alt="Left torn fragment of the access code document" class="max-h-36 mx-auto rounded-lg shadow-md border border-slate-700 object-contain bg-[#f4f1ea]">
+                </div>
+              </div>
+
+              <!-- Fragment 2 Slot -->
+              <div id="slot-frag-2" class="rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950/60 p-4 flex flex-col items-center justify-center min-h-[180px] text-center">
+                <div id="frag-2-empty">
+                  <p class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Right Fragment</p>
+                  <p class="text-sm text-slate-400">Complete Room 2 to recover</p>
+                </div>
+                <div id="frag-2-filled" class="hidden w-full">
+                  <p class="text-xs font-bold uppercase tracking-wider text-teal-400 mb-2">Fragment 2 Recovered</p>
+                  <img src="assets/fragment2.png" alt="Right torn fragment of the access code document" class="max-h-36 mx-auto rounded-lg shadow-md border border-slate-700 object-contain bg-[#f4f1ea]">
+                </div>
+              </div>
+            </div>
+
+            <!-- State B: Both Fragments Collected -> Visually Joined Reconstruction -->
+            <div id="fragments-reconstructed-view" class="hidden bg-slate-950 border border-teal-500/40 rounded-2xl p-4 sm:p-5">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">✓ Document Reconstructed</span>
+                <span class="text-xs text-slate-400">Torn edges aligned</span>
+              </div>
+              
+              <!-- Visual side-by-side join of fragment1.png and fragment2.png -->
+              <div class="relative flex items-center justify-center bg-[#f4f1ea] rounded-xl p-3 overflow-hidden border border-slate-700 shadow-inner">
+                <div class="flex items-center justify-center w-full max-w-md">
+                  <img src="assets/fragment1.png" alt="Left half of reconstructed access document" class="w-1/2 h-auto object-contain -mr-2 sm:-mr-3 select-none">
+                  <img src="assets/fragment2.png" alt="Right half of reconstructed access document" class="w-1/2 h-auto object-contain -ml-2 sm:-ml-3 select-none">
+                </div>
+              </div>
+
+              <!-- Accessible Text Equivalent (Available ONLY after both fragments are collected) -->
+              <div id="accessible-clue-box" class="mt-3 p-3 rounded-xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-slate-200" role="region" aria-label="Accessible text equivalent of reconstructed document">
+                <strong class="text-teal-300">Reconstructed Document Text:</strong> The left fragment displays the header <em>"ACCESS CODE"</em> above the digits <strong class="font-mono-code text-white">42</strong>, and the matching right fragment aligns along the torn seam to display <strong class="font-mono-code text-white">17</strong> — forming the complete four-digit code <strong class="font-mono-code text-amber-300">4217</strong>.
+              </div>
+            </div>
+          </div>
+
+          <!-- Right 5 Cols: 4-Digit Security Keypad -->
+          <div class="lg:col-span-5 bg-slate-950/90 border border-slate-800 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-2">
+              <label for="keypad-input" class="text-sm font-bold text-white uppercase tracking-wider">Room 3 Security Keypad</label>
+              <span id="keypad-status-pill" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30">Locked</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-4">Enter the 4-digit code from the reconstructed document to unseal the Operating Theatre.</p>
+
+            <form onsubmit="submitDoorCode(event)" class="space-y-3">
+              <div class="flex items-center gap-2">
+                <input id="keypad-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" autocomplete="off"
+                  class="w-full text-center font-mono-code text-2xl sm:text-3xl tracking-[0.5em] font-bold py-3 px-4 rounded-xl bg-slate-900 border border-slate-700 text-amber-300 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-500/30"
+                  aria-label="Four-digit Room 3 unlock code">
+              </div>
+              <button id="btn-unlock-room3" type="submit"
+                class="w-full py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-sm shadow-lg transition focus:outline-none focus:ring-2 focus:ring-amber-400">
+                Unlock Room 3
+              </button>
+            </form>
+            <p id="keypad-feedback" class="mt-3 text-xs text-center min-h-[1.25rem]" aria-live="polite"></p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SCREEN 4: ROOM 1 (RADIOLOGY & OSTEOLOGY ARCHIVE)
+         ===================================================================== -->
+    <section id="screen-room-1" class="hidden relative flex-grow p-4 sm:p-8">
+      <!-- Background Image: room1.png -->
+      <img src="assets/room1.png" alt="Radiology and Osteology Archive background" onerror="this.style.display='none'"
+           class="fixed inset-0 w-full h-full object-cover opacity-20 pointer-events-none z-0">
+      <div class="fixed inset-0 bg-gradient-to-b from-slate-950/85 via-slate-950/90 to-slate-950 pointer-events-none z-0"></div>
+
+      <div class="relative z-10 max-w-4xl mx-auto screen-fade">
+        <!-- Top Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <button type="button" onclick="showScreen('map')"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-sm font-medium transition">
+            <span>← Back to Map</span>
+          </button>
+          <span class="px-3 py-1 rounded-full bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs font-bold uppercase tracking-wider">
+            Room 1 • Radiology &amp; Osteology Archive
+          </span>
+        </div>
+
+        <!-- Room Narrative Intro -->
+        <div class="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl p-5 sm:p-6 mb-6 shadow-lg">
+          <h2 class="text-xl sm:text-2xl font-bold text-white mb-2">The Radiology &amp; Osteology Archive</h2>
+          <p class="text-sm sm:text-base text-slate-300 leading-relaxed">
+            Dust motes dance in the beam of your flashlight as you enter the archived records room. Skeletal models hang in glass cases, and yellowed X-rays are pinned to cracked lightboxes. A locked steel filing cabinet holds the first half of the Chief Surgeon's log.
+          </p>
+        </div>
+
+        <!-- Question 1.1: Multiple Selection -->
+        <div id="q1-1-card" class="bg-slate-900/95 border border-slate-800 rounded-2xl p-5 sm:p-7 mb-6 shadow-xl">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-teal-400">Challenge 1.1 • Multiple Selection</span>
+            <div class="flex items-center gap-2">
+              <span id="q1-1-status" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400">Unsolved</span>
+              <button type="button" onclick="toggleHint('hint-1-1')" class="text-xs px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 font-medium transition">
+                💡 Clinical Hint
+              </button>
+            </div>
+          </div>
+
+          <p class="text-sm sm:text-base text-slate-100 font-medium leading-relaxed mb-4">
+            On the lightbox, an X-ray highlights the <strong>sternal angle (Angle of Louis)</strong>. Which of the following anatomical landmarks and events occur at this specific horizontal plane (T4/T5 intervertebral disc level)? <em>Select all that apply.</em>
+          </p>
+
+          <!-- Optional Hint -->
+          <div id="hint-1-1" class="hidden mb-4 p-3 rounded-xl bg-sky-950/60 border border-sky-700/50 text-xs sm:text-sm text-sky-200">
+            <strong>Hint:</strong> Clinicians palpate the sternal angle to find the costal cartilage of the 2nd rib. Internally, this transverse thoracic plane marks where the trachea splits and where the aortic arch begins and ends.
+          </div>
+
+          <div class="space-y-2.5 mb-5" id="q1-1-options">
+            <label class="flex items-start gap-3 p-3.5 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800 cursor-pointer transition">
+              <input type="checkbox" name="q1_1" value="A" class="mt-1 w-4 h-4 rounded text-teal-500 focus:ring-teal-500 bg-slate-900 border-slate-600">
+              <span class="text-sm text-slate-200">A. Articulation of the 2nd costal cartilage with the sternum</span>
+            </label>
+            <label class="flex items-start gap-3 p-3.5 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800 cursor-pointer transition">
+              <input type="checkbox" name="q1_1" value="B" class="mt-1 w-4 h-4 rounded text-teal-500 focus:ring-teal-500 bg-slate-900 border-slate-600">
+              <span class="text-sm text-slate-200">B. Bifurcation of the trachea into the left and right main bronchi</span>
+            </label>
+            <label class="flex items-start gap-3 p-3.5 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800 cursor-pointer transition">
+              <input type="checkbox" name="q1_1" value="C" class="mt-1 w-4 h-4 rounded text-teal-500 focus:ring-teal-500 bg-slate-900 border-slate-600">
+              <span class="text-sm text-slate-200">C. Passage of the inferior vena cava through the diaphragm</span>
+            </label>
+            <label class="flex items-start gap-3 p-3.5 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800 cursor-pointer transition">
+              <input type="checkbox" name="q1_1" value="D" class="mt-1 w-4 h-4 rounded text-teal-500 focus:ring-teal-500 bg-slate-900 border-slate-600">
+              <span class="text-sm text-slate-200">D. Beginning and end of the aortic arch</span>
+            </label>
+            <label class="flex items-start gap-3 p-3.5 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800 cursor-pointer transition">
+              <input type="checkbox" name="q1_1" value="E" class="mt-1 w-4 h-4 rounded text-teal-500 focus:ring-teal-500 bg-slate-900 border-slate-600">
+              <span class="text-sm text-slate-200">E. Articulation of the 1st rib with the manubrium</span>
+            </label>
+          </div>
+
+          <button id="btn-submit-1-1" type="button" onclick="checkQ1_1()"
+            class="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-sm transition">
+            Verify Selection
+          </button>
+
+          <div id="feedback-1-1" class="hidden mt-4 p-4 rounded-xl text-sm leading-relaxed" role="alert"></div>
+        </div>
+
+        <!-- Question 1.2: Dropdown Completion -->
+        <div id="q1-2-card" class="bg-slate-900/95 border border-slate-800 rounded-2xl p-5 sm:p-7 mb-6 shadow-xl">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-teal-400">Challenge 1.2 • Dropdown Completion</span>
+            <div class="flex items-center gap-2">
+              <span id="q1-2-status" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400">Unsolved</span>
+              <button type="button" onclick="toggleHint('hint-1-2')" class="text-xs px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 font-medium transition">
+                💡 Clinical Hint
+              </button>
+            </div>
+          </div>
+
+          <p class="text-sm text-slate-300 mb-4">
+            An old anatomy chart on the wall details the mechanics of quiet inspiration. Complete the missing details to unlock the cabinet:
+          </p>
+
+          <!-- Optional Hint -->
+          <div id="hint-1-2" class="hidden mb-4 p-3 rounded-xl bg-sky-950/60 border border-sky-700/50 text-xs sm:text-sm text-sky-200">
+            <strong>Hint:</strong> The main dome-shaped muscle separating thorax and abdomen contracts during quiet inhalation alongside the outermost intercostal layer. Remember that intercostal nerves and vessels travel in the costal groove along the <em>inferior</em> margin of each rib.
+          </div>
+
+          <div class="p-4 sm:p-5 rounded-xl bg-slate-950/80 border border-slate-800 text-sm sm:text-base text-slate-200 leading-loose mb-5">
+            "During quiet inspiration, contraction of the
+            <select id="q1-2-d1" aria-label="Dropdown 1" class="mx-1 px-3 py-1 rounded-lg bg-slate-800 border border-slate-600 text-teal-300 font-semibold focus:outline-none focus:border-teal-400">
+              <option value="">-- Select --</option>
+              <option value="diaphragm">diaphragm</option>
+              <option value="transversus thoracis">transversus thoracis</option>
+              <option value="pectoralis minor">pectoralis minor</option>
+            </select>
+            causes it to flatten and move inferiorly, increasing the vertical dimension of the thoracic cavity. Simultaneously, the
+            <select id="q1-2-d2" aria-label="Dropdown 2" class="mx-1 px-3 py-1 rounded-lg bg-slate-800 border border-slate-600 text-teal-300 font-semibold focus:outline-none focus:border-teal-400">
+              <option value="">-- Select --</option>
+              <option value="external intercostal">external intercostal</option>
+              <option value="internal intercostal">internal intercostal</option>
+              <option value="innermost intercostal">innermost intercostal</option>
+            </select>
+            muscles contract to elevate the ribs, increasing the anterior-posterior and transverse dimensions. When performing a thoracentesis to drain pleural fluid, a needle is inserted just
+            <select id="q1-2-d3" aria-label="Dropdown 3" class="mx-1 px-3 py-1 rounded-lg bg-slate-800 border border-slate-600 text-teal-300 font-semibold focus:outline-none focus:border-teal-400">
+              <option value="">-- Select --</option>
+              <option value="superior">superior</option>
+              <option value="inferior">inferior</option>
+              <option value="anterior">anterior</option>
+            </select>
+            to the rib to avoid damaging the intercostal neurovascular bundle."
+          </div>
+
+          <button id="btn-submit-1-2" type="button" onclick="checkQ1_2()"
+            class="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-sm transition">
+            Verify Chart Entry
+          </button>
+
+          <div id="feedback-1-2" class="hidden mt-4 p-4 rounded-xl text-sm leading-relaxed" role="alert"></div>
+        </div>
+
+        <!-- Room 1 Completion Reward Panel (Revealed once both Q1.1 and Q1.2 are solved) -->
+        <div id="room-1-reward" class="hidden bg-emerald-950/60 border border-emerald-500/50 rounded-2xl p-6 text-center shadow-2xl screen-fade">
+          <p class="text-xs font-bold uppercase tracking-widest text-emerald-400 mb-1">Filing Cabinet Unlocked!</p>
+          <h3 class="text-xl font-bold text-white mb-3">Document Fragment 1 Recovered</h3>
+          <p class="text-sm text-slate-300 max-w-lg mx-auto mb-4">
+            Inside the drawer, you find the left half of the Chief Surgeon's torn access slip. It has been added to your Evidence Desk on the Map.
+          </p>
+          <div class="inline-block bg-[#f4f1ea] p-3 rounded-xl border border-slate-600 shadow-lg mb-5">
+            <img src="assets/fragment1.png" alt="Collected Document Fragment 1" class="max-h-44 mx-auto object-contain">
+          </div>
+          <div>
+            <button type="button" onclick="showScreen('map')"
+              class="px-8 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg transition">
+              Back to Map
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SCREEN 5: ROOM 2 (CARDIOPULMONARY WARD)
+         ===================================================================== -->
+    <section id="screen-room-2" class="hidden relative flex-grow p-4 sm:p-8">
+      <!-- Background Image: room2.png -->
+      <img src="assets/room2.png" alt="Cardiopulmonary Ward background" onerror="this.style.display='none'"
+           class="fixed inset-0 w-full h-full object-cover opacity-20 pointer-events-none z-0">
+      <div class="fixed inset-0 bg-gradient-to-b from-slate-950/85 via-slate-950/90 to-slate-950 pointer-events-none z-0"></div>
+
+      <div class="relative z-10 max-w-4xl mx-auto screen-fade">
+        <!-- Top Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <button type="button" onclick="showScreen('map')"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-sm font-medium transition">
+            <span>← Back to Map</span>
+          </button>
+          <span class="px-3 py-1 rounded-full bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs font-bold uppercase tracking-wider">
+            Room 2 • Cardiopulmonary Ward
+          </span>
+        </div>
+
+        <!-- Room Narrative Intro -->
+        <div class="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl p-5 sm:p-6 mb-6 shadow-lg">
+          <h2 class="text-xl sm:text-2xl font-bold text-white mb-2">The Cardiopulmonary Ward</h2>
+          <p class="text-sm sm:text-base text-slate-300 leading-relaxed">
+            Rusted bedframes and overturned IV stands clutter this darkened ward. An old mechanical ventilator sits beside a dusty anatomical heart model. A combination lock secures the medical chart box containing the second half of the missing log.
+          </p>
+        </div>
+
+        <!-- Question 2.1: Sequencing -->
+        <div id="q2-1-card" class="bg-slate-900/95 border border-slate-800 rounded-2xl p-5 sm:p-7 mb-6 shadow-xl">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-teal-400">Challenge 2.1 • Anatomical Sequencing</span>
+            <div class="flex items-center gap-2">
+              <span id="q2-1-status" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400">Unsolved</span>
+              <button type="button" onclick="toggleHint('hint-2-1')" class="text-xs px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 font-medium transition">
+                💡 Clinical Hint
+              </button>
+            </div>
+          </div>
+
+          <p class="text-sm sm:text-base text-slate-100 font-medium leading-relaxed mb-4">
+            A faded patient chart traces a drop of deoxygenated blood returning from the systemic circulation through the heart and lungs. Arrange the structures in the correct anatomical sequence of blood flow, <strong>starting from the right atrium</strong>:
+          </p>
+
+          <!-- Optional Hint -->
+          <div id="hint-2-1" class="hidden mb-4 p-3 rounded-xl bg-sky-950/60 border border-sky-700/50 text-xs sm:text-sm text-sky-200">
+            <strong>Hint:</strong> Blood leaves the right atrium through the right AV valve into the right pumping chamber, passes a semilunar valve into the pulmonary arterial trunk, and returns oxygenated via veins into the left atrium.
+          </div>
+
+          <!-- Interactive Reorderable List -->
+          <div id="sequence-list" class="space-y-2 mb-5"></div>
+
+          <button id="btn-submit-2-1" type="button" onclick="checkQ2_1()"
+            class="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-sm transition">
+            Verify Pathway Sequence
+          </button>
+
+          <div id="feedback-2-1" class="hidden mt-4 p-4 rounded-xl text-sm leading-relaxed" role="alert"></div>
+        </div>
+
+        <!-- Question 2.2: Matching -->
+        <div id="q2-2-card" class="bg-slate-900/95 border border-slate-800 rounded-2xl p-5 sm:p-7 mb-6 shadow-xl">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-teal-400">Challenge 2.2 • Concept Matching</span>
+            <div class="flex items-center gap-2">
+              <span id="q2-2-status" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400">Unsolved</span>
+              <button type="button" onclick="toggleHint('hint-2-2')" class="text-xs px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 font-medium transition">
+                💡 Clinical Hint
+              </button>
+            </div>
+          </div>
+
+          <p class="text-sm sm:text-base text-slate-100 font-medium leading-relaxed mb-4">
+            Match each mediastinal structure or nerve on the left with its correct anatomical relationship or function on the right:
+          </p>
+
+          <!-- Optional Hint -->
+          <div id="hint-2-2" class="hidden mb-4 p-3 rounded-xl bg-sky-950/60 border border-sky-700/50 text-xs sm:text-sm text-sky-200">
+            <strong>Hint:</strong> The phrenic nerve innervates the diaphragm and passes anterior to the lung root; the left recurrent laryngeal nerve hooks beneath the aortic arch; the azygos vein runs on the right vertebral column; and the thoracic duct drains lymph to the left venous angle.
+          </div>
+
+          <div class="space-y-3 mb-5">
+            <!-- Pair 1 -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+              <div class="md:col-span-4 font-semibold text-sm text-teal-300">Left Phrenic Nerve</div>
+              <div class="md:col-span-8">
+                <select id="match-1" aria-label="Match for Left Phrenic Nerve" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:outline-none focus:border-teal-400">
+                  <option value="">-- Select anatomical relationship / function --</option>
+                  <option value="phrenic">Passes anterior to the root of the lung; provides motor innervation to the diaphragm.</option>
+                  <option value="laryngeal">Loops inferior to the aortic arch, just lateral to the ligamentum arteriosum.</option>
+                  <option value="azygos">Ascends along the right side of the thoracic vertebral column and arches over the right lung root to enter the SVC.</option>
+                  <option value="duct">Crosses from right to left around the T5 level and drains lymph into the left venous angle.</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Pair 2 -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+              <div class="md:col-span-4 font-semibold text-sm text-teal-300">Left Recurrent Laryngeal Nerve</div>
+              <div class="md:col-span-8">
+                <select id="match-2" aria-label="Match for Left Recurrent Laryngeal Nerve" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:outline-none focus:border-teal-400">
+                  <option value="">-- Select anatomical relationship / function --</option>
+                  <option value="phrenic">Passes anterior to the root of the lung; provides motor innervation to the diaphragm.</option>
+                  <option value="laryngeal">Loops inferior to the aortic arch, just lateral to the ligamentum arteriosum.</option>
+                  <option value="azygos">Ascends along the right side of the thoracic vertebral column and arches over the right lung root to enter the SVC.</option>
+                  <option value="duct">Crosses from right to left around the T5 level and drains lymph into the left venous angle.</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Pair 3 -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+              <div class="md:col-span-4 font-semibold text-sm text-teal-300">Azygos Vein</div>
+              <div class="md:col-span-8">
+                <select id="match-3" aria-label="Match for Azygos Vein" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:outline-none focus:border-teal-400">
+                  <option value="">-- Select anatomical relationship / function --</option>
+                  <option value="phrenic">Passes anterior to the root of the lung; provides motor innervation to the diaphragm.</option>
+                  <option value="laryngeal">Loops inferior to the aortic arch, just lateral to the ligamentum arteriosum.</option>
+                  <option value="azygos">Ascends along the right side of the thoracic vertebral column and arches over the right lung root to enter the SVC.</option>
+                  <option value="duct">Crosses from right to left around the T5 level and drains lymph into the left venous angle.</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Pair 4 -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+              <div class="md:col-span-4 font-semibold text-sm text-teal-300">Thoracic Duct</div>
+              <div class="md:col-span-8">
+                <select id="match-4" aria-label="Match for Thoracic Duct" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:outline-none focus:border-teal-400">
+                  <option value="">-- Select anatomical relationship / function --</option>
+                  <option value="phrenic">Passes anterior to the root of the lung; provides motor innervation to the diaphragm.</option>
+                  <option value="laryngeal">Loops inferior to the aortic arch, just lateral to the ligamentum arteriosum.</option>
+                  <option value="azygos">Ascends along the right side of the thoracic vertebral column and arches over the right lung root to enter the SVC.</option>
+                  <option value="duct">Crosses from right to left around the T5 level and drains lymph into the left venous angle.</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <button id="btn-submit-2-2" type="button" onclick="checkQ2_2()"
+            class="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-sm transition">
+            Verify Mediastinal Matches
+          </button>
+
+          <div id="feedback-2-2" class="hidden mt-4 p-4 rounded-xl text-sm leading-relaxed" role="alert"></div>
+        </div>
+
+        <!-- Room 2 Completion Reward Panel -->
+        <div id="room-2-reward" class="hidden bg-emerald-950/60 border border-emerald-500/50 rounded-2xl p-6 text-center shadow-2xl screen-fade">
+          <p class="text-xs font-bold uppercase tracking-widest text-emerald-400 mb-1">Medical Chart Box Unlocked!</p>
+          <h3 class="text-xl font-bold text-white mb-3">Document Fragment 2 Recovered</h3>
+          <p class="text-sm text-slate-300 max-w-lg mx-auto mb-4">
+            Beneath the patient records, you retrieve the right half of the Chief Surgeon's torn access slip. It has been added to your Evidence Desk on the Map.
+          </p>
+          <div class="inline-block bg-[#f4f1ea] p-3 rounded-xl border border-slate-600 shadow-lg mb-5">
+            <img src="assets/fragment2.png" alt="Collected Document Fragment 2" class="max-h-44 mx-auto object-contain">
+          </div>
+          <div>
+            <button type="button" onclick="showScreen('map')"
+              class="px-8 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg transition">
+              Back to Map
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SCREEN 6: ROOM 3 (CARDIOTHORACIC OPERATING THEATRE - FINAL CHALLENGE)
+         ===================================================================== -->
+    <section id="screen-room-3" class="hidden relative flex-grow p-4 sm:p-8">
+      <!-- Background Image: room3.png -->
+      <img src="assets/room3.png" alt="Cardiothoracic Operating Theatre background" onerror="this.style.display='none'"
+           class="fixed inset-0 w-full h-full object-cover opacity-25 pointer-events-none z-0">
+      <div class="fixed inset-0 bg-gradient-to-b from-slate-950/85 via-slate-950/90 to-slate-950 pointer-events-none z-0"></div>
+
+      <div class="relative z-10 max-w-3xl mx-auto screen-fade">
+        <!-- Top Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <button type="button" onclick="showScreen('map')"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-sm font-medium transition">
+            <span>← Back to Map</span>
+          </button>
+          <span class="px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider">
+            Room 3 • Final Exit Challenge
+          </span>
+        </div>
+
+        <!-- Room Narrative Intro -->
+        <div class="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl p-5 sm:p-6 mb-6 shadow-lg">
+          <h2 class="text-xl sm:text-2xl font-bold text-white mb-2">The Cardiothoracic Operating Theatre</h2>
+          <p class="text-sm sm:text-base text-slate-300 leading-relaxed">
+            The heavy steel doors hiss open as you enter <strong class="font-mono-code text-amber-300">4217</strong>. Overhead, a single surgical lamp flickers above the operating table. On the instrument tray lies the master exit keycard, locked inside a sterilizer box controlled by a final diagnostic terminal.
+          </p>
+        </div>
+
+        <!-- Question 3.1: Short Text Answer -->
+        <div class="bg-slate-900/95 border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-2xl">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-amber-400">Final Challenge 3.1 • Short Text Answer</span>
+            <button type="button" onclick="toggleHint('hint-3-1')" class="text-xs px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 font-medium transition">
+              💡 Clinical Hint
+            </button>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-sm sm:text-base text-slate-200 italic leading-relaxed mb-4">
+            "A patient suffers a penetrating stab wound in the left 4th intercostal space just lateral to the sternum. Blood rapidly accumulates in the pericardial cavity, compressing the heart and restricting ventricular filling."
+          </div>
+
+          <p class="text-sm sm:text-base text-white font-semibold mb-3">
+            What is the specific clinical name of this life-threatening condition? <span class="text-slate-400 font-normal">(Two words)</span>
+          </p>
+
+          <!-- Optional Hint -->
+          <div id="hint-3-1" class="hidden mb-4 p-3 rounded-xl bg-sky-950/60 border border-sky-700/50 text-xs sm:text-sm text-sky-200">
+            <strong>Hint:</strong> Think of the French term for "plugging" or compression of the heart (<em>Cardiac _________</em> or <em>Pericardial _________</em>) caused by fluid buildup inside the tough fibrous pericardial sac.
+          </div>
+
+          <form onsubmit="checkQ3_1(event)" class="space-y-4">
+            <input id="q3-1-input" type="text" placeholder="Enter the two-word clinical condition..." autocomplete="off"
+              class="w-full px-4 py-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-base focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/30"
+              aria-label="Clinical condition short answer">
+            <button id="btn-submit-3-1" type="submit"
+              class="w-full sm:w-auto px-8 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-sm shadow-lg transition">
+              Submit Diagnosis &amp; Claim Keycard
+            </button>
+          </form>
+
+          <div id="feedback-3-1" class="hidden mt-4 p-4 rounded-xl text-sm leading-relaxed" role="alert"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SCREEN 7: COMPLETION SCREEN
+         ===================================================================== -->
+    <section id="screen-complete" class="hidden flex-grow flex items-center justify-center p-4 sm:p-8 bg-slate-950">
+      <div class="max-w-2xl w-full bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 sm:p-10 shadow-2xl text-center screen-fade">
+        <div class="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 text-3xl mx-auto mb-4">
+          ✓
+        </div>
+        <p class="text-xs font-bold uppercase tracking-widest text-emerald-400 mb-2">Quarantine Escaped</p>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white mb-4">You Escaped St. Jude’s!</h2>
+        <p class="text-sm sm:text-base text-slate-300 leading-relaxed mb-6">
+          The sterilizer box clicks open, releasing the Master Exit Keycard. With the heavy blast doors sliding open behind you, you step out into the fresh night air—having mastered the clinical anatomy of the thorax.
+        </p>
+
+        <!-- Player Performance Summary -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8 text-left">
+          <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800">
+            <p class="text-xs text-slate-400 uppercase font-semibold">Time Remaining</p>
+            <p id="summary-time" class="font-mono-code text-xl font-bold text-amber-300 mt-1">--:--</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800">
+            <p class="text-xs text-slate-400 uppercase font-semibold">Remaining Vitals</p>
+            <p id="summary-life" class="font-mono-code text-xl font-bold text-emerald-400 mt-1">100 HP</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800">
+            <p class="text-xs text-slate-400 uppercase font-semibold">Rooms &amp; Clues</p>
+            <p class="font-mono-code text-xl font-bold text-teal-300 mt-1">3/3 • Code 4217</p>
+          </div>
+        </div>
+
+        <button type="button" onclick="restartGame()"
+          class="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-base shadow-lg transition focus:outline-none focus:ring-4 focus:ring-teal-500/50">
+          <span>Restart Escape Room</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SCREEN 8: GAME OVER SCREEN (Timer Expired or 0 Life Points)
+         ===================================================================== -->
+    <section id="screen-gameover" class="hidden flex-grow flex items-center justify-center p-4 sm:p-8 bg-slate-950">
+      <div class="max-w-xl w-full bg-slate-900 border border-rose-500/40 rounded-3xl p-6 sm:p-10 shadow-2xl text-center screen-fade">
+        <div class="w-16 h-16 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 text-3xl mx-auto mb-4">
+          !
+        </div>
+        <p class="text-xs font-bold uppercase tracking-widest text-rose-400 mb-2">Lockdown Permanent</p>
+        <h2 class="text-3xl font-extrabold text-white mb-3">Mission Failed</h2>
+        <p id="gameover-reason" class="text-sm sm:text-base text-slate-300 leading-relaxed mb-8">
+          Your vital signs reached zero before you could unseal the Cardiothoracic Operating Theatre.
+        </p>
+
+        <button type="button" onclick="restartGame()"
+          class="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-base shadow-lg transition focus:outline-none focus:ring-4 focus:ring-rose-500/50">
+          <span>Restart Mission</span>
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =======================================================================
+       GAME LOGIC, STATE MANAGEMENT & AUDIO CONTROLLER
+       ======================================================================= -->
+  <script>
+    // Exact 4-digit code derived from joining fragment1.png ("42") and fragment2.png ("17")
+    const CORRECT_DOOR_CODE = "4217";
+    const STARTING_TIME_SECONDS = 20 * 60; // 20 minutes
+    const STARTING_LIFE = 100;
+    const INCORRECT_PENALTY = 10;
+
+    // Initial scrambled order for Question 2.1 (Sequencing)
+    const INITIAL_SEQUENCE_ITEMS = [
+      { id: "pulm_veins", label: "Pulmonary veins" },
+      { id: "right_ventricle", label: "Right ventricle" },
+      { id: "tricuspid", label: "Tricuspid (right atrioventricular) valve" },
+      { id: "left_atrium", label: "Left atrium" },
+      { id: "pulm_trunk", label: "Pulmonary trunk" },
+      { id: "pulm_valve", label: "Pulmonary valve" }
+    ];
+
+    const CORRECT_SEQUENCE_IDS = [
+      "tricuspid",
+      "right_ventricle",
+      "pulm_valve",
+      "pulm_trunk",
+      "pulm_veins",
+      "left_atrium"
+    ];
+
+    // Centralized Game State
+    let gameState = {
+      timeRemaining: STARTING_TIME_SECONDS,
+      timerInterval: null,
+      life: STARTING_LIFE,
+      isMuted: false,
+      audioActivated: false,
+      gameStarted: false,
+      gameEnded: false,
+      q1_1_solved: false,
+      q1_2_solved: false,
+      q2_1_solved: false,
+      q2_2_solved: false,
+      q3_1_solved: false,
+      fragment1Collected: false,
+      fragment2Collected: false,
+      room3Unlocked: false,
+      currentSequence: []
+    };
+
+    // -----------------------------------------------------------------------
+    // AUDIO CONTROLLER (With safe error handling & visual toast sync)
+    // -----------------------------------------------------------------------
+    function activateAudio() {
+      gameState.audioActivated = true;
+      const bgm = document.getElementById("audio-bgm");
+      if (bgm && !gameState.isMuted) {
+        bgm.volume = 0.35;
+        bgm.play().catch(() => {
+          // Browser autoplay policy handled gracefully
+        });
+      }
+      updateMuteUI();
+    }
+
+    function toggleAudioMute() {
+      gameState.isMuted = !gameState.isMuted;
+      const bgm = document.getElementById("audio-bgm");
+      if (bgm) {
+        bgm.muted = gameState.isMuted;
+        if (!gameState.isMuted && gameState.audioActivated) {
+          bgm.play().catch(() => {});
+        }
+      }
+      updateMuteUI();
+    }
+
+    function updateMuteUI() {
+      const icon = gameState.isMuted ? "🔇" : "🔊";
+      const label = gameState.isMuted ? "Muted" : "Audio On";
+      const hudIcon = document.getElementById("mute-icon");
+      const hudLabel = document.getElementById("mute-label");
+      if (hudIcon) hudIcon.textContent = icon;
+      if (hudLabel) hudLabel.textContent = label;
+
+      document.querySelectorAll(".mute-icon-sync").forEach(el => el.textContent = icon);
+      document.querySelectorAll(".mute-label-sync").forEach(el => el.textContent = gameState.isMuted ? "Audio Muted" : "Audio Ready");
+    }
+
+    function playSoundEffect(elementId) {
+      if (gameState.isMuted) return;
+      const audioEl = document.getElementById(elementId);
+      if (audioEl) {
+        audioEl.currentTime = 0;
+        audioEl.play().catch(() => {});
+      }
+    }
+
+    // Accessible visual toast banner so no game event relies on audio alone
+    function showToast(message, type = "info") {
+      const container = document.getElementById("toast-container");
+      const toast = document.createElement("div");
+      const styles = {
+        success: "bg-emerald-950/95 border-emerald-500 text-emerald-200",
+        danger: "bg-rose-950/95 border-rose-500 text-rose-200",
+        amber: "bg-amber-950/95 border-amber-500 text-amber-200",
+        info: "bg-slate-900/95 border-teal-500 text-teal-200"
+      };
+      toast.className = `pointer-events-auto px-4 py-3 rounded-xl border shadow-xl text-xs sm:text-sm font-medium backdrop-blur-md transition-all duration-300 ${styles[type] || styles.info}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        setTimeout(() => toast.remove(), 300);
+      }, 3800);
+    }
+
+    // -----------------------------------------------------------------------
+    // SCREEN NAVIGATION & TIMER
+    // -----------------------------------------------------------------------
+    function showScreen(screenName) {
+      const screens = [
+        "start", "instructions", "map",
+        "room-1", "room-2", "room-3",
+        "complete", "gameover"
+      ];
+      screens.forEach(name => {
+        const el = document.getElementById(`screen-${name}`);
+        if (el) el.classList.add("hidden");
+      });
+
+      const target = document.getElementById(`screen-${screenName}`);
+      if (target) target.classList.remove("hidden");
+
+      // Show HUD on gameplay screens
+      const hud = document.getElementById("game-hud");
+      const hideHudScreens = ["start", "instructions", "complete", "gameover"];
+      if (hideHudScreens.includes(screenName)) {
+        hud.classList.add("hidden");
+      } else {
+        hud.classList.remove("hidden");
+      }
+
+      // Update location label in HUD
+      const locMap = {
+        "map": "Quarantine Wing Map",
+        "room-1": "Room 1: Radiology & Osteology",
+        "room-2": "Room 2: Cardiopulmonary Ward",
+        "room-3": "Room 3: Operating Theatre"
+      };
+      if (locMap[screenName]) {
+        document.getElementById("hud-location").textContent = locMap[screenName];
+      }
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function goToInstructions() {
+      activateAudio();
+      showScreen("instructions");
+    }
+
+    function startGameplay() {
+      activateAudio();
+      if (!gameState.gameStarted) {
+        gameState.gameStarted = true;
+        renderSequenceList();
+        startTimer();
+      }
+      updateMapAndReconstructionUI();
+      showScreen("map");
+    }
+
+    function startTimer() {
+      clearInterval(gameState.timerInterval);
+      updateTimerDisplay();
+      gameState.timerInterval = setInterval(() => {
+        if (gameState.gameEnded) {
+          clearInterval(gameState.timerInterval);
+          return;
+        }
+        gameState.timeRemaining--;
+        updateTimerDisplay();
+
+        if (gameState.timeRemaining <= 0) {
+          triggerGameOver("The 20-minute countdown expired before you could escape the quarantine wing.");
+        }
+      }, 1000);
+    }
+
+    function formatTime(seconds) {
+      const safeSec = Math.max(0, seconds);
+      const mins = Math.floor(safeSec / 60);
+      const secs = safeSec % 60;
+      return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+
+    function updateTimerDisplay() {
+      const formatted = formatTime(gameState.timeRemaining);
+      const timerEl = document.getElementById("hud-timer");
+      const badgeEl = document.getElementById("timer-badge");
+      if (timerEl) timerEl.textContent = formatted;
+
+      if (gameState.timeRemaining <= 120 && badgeEl) {
+        badgeEl.classList.add("border-rose-500", "pulse-danger");
+        timerEl.classList.replace("text-amber-300", "text-rose-400");
+      }
+    }
+
+    function deductLifePoints() {
+      gameState.life = Math.max(0, gameState.life - INCORRECT_PENALTY);
+      const lifeEl = document.getElementById("hud-life");
+      const badgeEl = document.getElementById("life-badge");
+      if (lifeEl) {
+        lifeEl.textContent = `${gameState.life} HP`;
+        if (gameState.life <= 30) {
+          lifeEl.classList.replace("text-emerald-400", "text-rose-400");
+          badgeEl.classList.add("border-rose-500", "pulse-danger");
+        } else if (gameState.life <= 60) {
+          lifeEl.classList.replace("text-emerald-400", "text-amber-300");
+        }
+      }
+
+      playSoundEffect("audio-incorrect");
+      showToast(`Incorrect answer! -10 Life Points (${gameState.life} HP remaining).`, "danger");
+
+      if (gameState.life <= 0) {
+        triggerGameOver("Your Life Points dropped to 0 HP due to repeated diagnostic errors.");
+      }
+    }
+
+    function triggerGameOver(reasonText) {
+      gameState.gameEnded = true;
+      clearInterval(gameState.timerInterval);
+      document.getElementById("gameover-reason").textContent = reasonText;
+      showScreen("gameover");
+    }
+
+    function enterRoom(roomNum) {
+      if (roomNum === 3 && !gameState.room3Unlocked) {
+        showToast("Room 3 is locked. Enter the 4-digit code on the keypad first.", "amber");
+        return;
+      }
+      showScreen(`room-${roomNum}`);
+    }
+
+    function toggleHint(hintId) {
+      const el = document.getElementById(hintId);
+      if (el) el.classList.toggle("hidden");
+    }
+
+    // -----------------------------------------------------------------------
+    // ROOM 1 CHALLENGES (Q1.1 Multiple Selection & Q1.2 Dropdown Completion)
+    // -----------------------------------------------------------------------
+    function checkQ1_1() {
+      if (gameState.q1_1_solved) return;
+      const checked = Array.from(document.querySelectorAll('input[name="q1_1"]:checked')).map(cb => cb.value).sort();
+      const feedbackEl = document.getElementById("feedback-1-1");
+      feedbackEl.classList.remove("hidden");
+
+      if (checked.length === 0) {
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-amber-950/70 border border-amber-500/40 text-amber-200";
+        feedbackEl.textContent = "Please select at least one option before verifying.";
+        return;
+      }
+
+      const isCorrect = checked.length === 3 && checked[0] === "A" && checked[1] === "B" && checked[2] === "D";
+
+      if (isCorrect) {
+        gameState.q1_1_solved = true;
+        playSoundEffect("audio-correct");
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-emerald-950/70 border border-emerald-500/50 text-emerald-200";
+        feedbackEl.innerHTML = `<strong>Correct!</strong> The sternal angle (T4/T5) is a vital clinical landmark marking the 2nd rib articulation (used for counting ribs), the tracheal bifurcation (carina), and the start/end of the aortic arch. The 1st rib articulates superiorly at the manubrium (E), while the IVC passes through the diaphragm much lower at the T8 level (C).`;
+
+        document.getElementById("q1-1-status").textContent = "✓ Solved";
+        document.getElementById("q1-1-status").className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300";
+        document.getElementById("btn-submit-1-1").disabled = true;
+        document.getElementById("btn-submit-1-1").classList.add("opacity-50", "cursor-not-allowed");
+        document.querySelectorAll('input[name="q1_1"]').forEach(cb => cb.disabled = true);
+
+        checkRoom1Completion();
+      } else {
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-rose-950/70 border border-rose-500/50 text-rose-200";
+        feedbackEl.innerHTML = `<strong>Incorrect (-10 HP).</strong> Review the transverse thoracic plane at T4/T5: consider which costal cartilage articulates at the sternal angle, where the trachea bifurcates, and where the aortic arch begins and ends.`;
+        deductLifePoints();
+      }
+    }
+
+    function checkQ1_2() {
+      if (gameState.q1_2_solved) return;
+      const d1 = document.getElementById("q1-2-d1").value;
+      const d2 = document.getElementById("q1-2-d2").value;
+      const d3 = document.getElementById("q1-2-d3").value;
+      const feedbackEl = document.getElementById("feedback-1-2");
+      feedbackEl.classList.remove("hidden");
+
+      if (!d1 || !d2 || !d3) {
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-amber-950/70 border border-amber-500/40 text-amber-200";
+        feedbackEl.textContent = "Please complete all three dropdown menus before verifying.";
+        return;
+      }
+
+      const isCorrect = (d1 === "diaphragm" && d2 === "external intercostal" && d3 === "superior");
+
+      if (isCorrect) {
+        gameState.q1_2_solved = true;
+        playSoundEffect("audio-correct");
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-emerald-950/70 border border-emerald-500/50 text-emerald-200";
+        feedbackEl.innerHTML = `<strong>Well done!</strong> The diaphragm and external intercostals are the primary muscles of quiet inspiration. Because the intercostal vein, artery, and nerve (VAN) run in the costal groove along the <em>inferior</em> border of each rib, clinical procedures enter just <em>superior</em> to the rib below.`;
+
+        document.getElementById("q1-2-status").textContent = "✓ Solved";
+        document.getElementById("q1-2-status").className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300";
+        document.getElementById("btn-submit-1-2").disabled = true;
+        document.getElementById("btn-submit-1-2").classList.add("opacity-50", "cursor-not-allowed");
+        ["q1-2-d1", "q1-2-d2", "q1-2-d3"].forEach(id => document.getElementById(id).disabled = true);
+
+        checkRoom1Completion();
+      } else {
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-rose-950/70 border border-rose-500/50 text-rose-200";
+        feedbackEl.innerHTML = `<strong>Incorrect (-10 HP).</strong> Check the primary muscles of quiet inhalation and recall that the neurovascular bundle lies in the costal groove along the inferior edge of each rib.`;
+        deductLifePoints();
+      }
+    }
+
+    function checkRoom1Completion() {
+      if (gameState.q1_1_solved && gameState.q1_2_solved && !gameState.fragment1Collected) {
+        gameState.fragment1Collected = true;
+        playSoundEffect("audio-doc");
+        showToast("Room 1 Cleared! Document Fragment 1 collected.", "success");
+
+        const rewardEl = document.getElementById("room-1-reward");
+        rewardEl.classList.remove("hidden");
+        rewardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        updateMapAndReconstructionUI();
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // ROOM 2 CHALLENGES (Q2.1 Sequencing & Q2.2 Matching)
+    // -----------------------------------------------------------------------
+    function renderSequenceList() {
+      if (gameState.currentSequence.length === 0) {
+        gameState.currentSequence = INITIAL_SEQUENCE_ITEMS.map(item => ({ ...item }));
+      }
+      const container = document.getElementById("sequence-list");
+      container.innerHTML = "";
+
+      gameState.currentSequence.forEach((item, index) => {
+        const row = document.createElement("div");
+        row.className = "flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-950/80 border border-slate-800";
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="w-7 h-7 rounded-lg bg-teal-500/15 border border-teal-500/30 text-teal-300 font-mono-code text-xs font-bold flex items-center justify-center shrink-0">
+              ${index + 1}
+            </span>
+            <span class="text-sm text-slate-200 font-medium">${item.label}</span>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button type="button" onclick="moveSequenceItem(${index}, -1)" ${index === 0 || gameState.q2_1_solved ? "disabled" : ""}
+              class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 text-xs font-bold border border-slate-700"
+              aria-label="Move ${item.label} up">
+              ↑
+            </button>
+            <button type="button" onclick="moveSequenceItem(${index}, 1)" ${index === gameState.currentSequence.length - 1 || gameState.q2_1_solved ? "disabled" : ""}
+              class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 text-xs font-bold border border-slate-700"
+              aria-label="Move ${item.label} down">
+              ↓
+            </button>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function moveSequenceItem(index, direction) {
+      if (gameState.q2_1_solved) return;
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= gameState.currentSequence.length) return;
+
+      const temp = gameState.currentSequence[index];
+      gameState.currentSequence[index] = gameState.currentSequence[targetIndex];
+      gameState.currentSequence[targetIndex] = temp;
+      renderSequenceList();
+    }
+
+    function checkQ2_1() {
+      if (gameState.q2_1_solved) return;
+      const userOrder = gameState.currentSequence.map(item => item.id);
+      const isCorrect = userOrder.every((id, idx) => id === CORRECT_SEQUENCE_IDS[idx]);
+      const feedbackEl = document.getElementById("feedback-2-1");
+      feedbackEl.classList.remove("hidden");
+
+      if (isCorrect) {
+        gameState.q2_1_solved = true;
+        playSoundEffect("audio-correct");
+        renderSequenceList();
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-emerald-950/70 border border-emerald-500/50 text-emerald-200";
+        feedbackEl.innerHTML = `<strong>Exact match!</strong> Deoxygenated blood flows from the right atrium through the tricuspid valve into the right ventricle, exits via the pulmonary valve into the pulmonary trunk/arteries toward the lungs, and returns oxygenated via the pulmonary veins into the left atrium.`;
+
+        document.getElementById("q2-1-status").textContent = "✓ Solved";
+        document.getElementById("q2-1-status").className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300";
+        document.getElementById("btn-submit-2-1").disabled = true;
+        document.getElementById("btn-submit-2-1").classList.add("opacity-50", "cursor-not-allowed");
+
+        checkRoom2Completion();
+      } else {
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-rose-950/70 border border-rose-500/50 text-rose-200";
+        feedbackEl.innerHTML = `<strong>Incorrect sequence (-10 HP).</strong> Trace the blood path step-by-step from the right atrium: AV valve → right ventricle → semilunar valve → pulmonary arterial trunk → lungs → pulmonary veins → left atrium.`;
+        deductLifePoints();
+      }
+    }
+
+    function checkQ2_2() {
+      if (gameState.q2_2_solved) return;
+      const m1 = document.getElementById("match-1").value;
+      const m2 = document.getElementById("match-2").value;
+      const m3 = document.getElementById("match-3").value;
+      const m4 = document.getElementById("match-4").value;
+      const feedbackEl = document.getElementById("feedback-2-2");
+      feedbackEl.classList.remove("hidden");
+
+      if (!m1 || !m2 || !m3 || !m4) {
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-amber-950/70 border border-amber-500/40 text-amber-200";
+        feedbackEl.textContent = "Please select a match for all four mediastinal structures before verifying.";
+        return;
+      }
+
+      const isCorrect = (m1 === "phrenic" && m2 === "laryngeal" && m3 === "azygos" && m4 === "duct");
+
+      if (isCorrect) {
+        gameState.q2_2_solved = true;
+        playSoundEffect("audio-correct");
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-emerald-950/70 border border-emerald-500/50 text-emerald-200";
+        feedbackEl.innerHTML = `<strong>Great job navigating the mediastinum!</strong> Remembering that the phrenic nerves pass <em>anterior</em> to the lung roots (while vagus nerves pass <em>posterior</em>) and knowing the course of the left recurrent laryngeal nerve around the aortic arch are crucial for thoracic surgery and pathology.`;
+
+        document.getElementById("q2-2-status").textContent = "✓ Solved";
+        document.getElementById("q2-2-status").className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300";
+        document.getElementById("btn-submit-2-2").disabled = true;
+        document.getElementById("btn-submit-2-2").classList.add("opacity-50", "cursor-not-allowed");
+        ["match-1", "match-2", "match-3", "match-4"].forEach(id => document.getElementById(id).disabled = true);
+
+        checkRoom2Completion();
+      } else {
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-rose-950/70 border border-rose-500/50 text-rose-200";
+        feedbackEl.innerHTML = `<strong>Incorrect (-10 HP).</strong> One or more mediastinal pairings do not match. Double-check the course of the phrenic nerve relative to the lung root, the aortic loop of the left recurrent laryngeal nerve, and the venous/lymphatic drainage pathways.`;
+        deductLifePoints();
+      }
+    }
+
+    function checkRoom2Completion() {
+      if (gameState.q2_1_solved && gameState.q2_2_solved && !gameState.fragment2Collected) {
+        gameState.fragment2Collected = true;
+        playSoundEffect("audio-doc");
+        showToast("Room 2 Cleared! Document Fragment 2 collected.", "success");
+
+        const rewardEl = document.getElementById("room-2-reward");
+        rewardEl.classList.remove("hidden");
+        rewardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        updateMapAndReconstructionUI();
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // MAP, DOCUMENT RECONSTRUCTION & 4-DIGIT CODE UNLOCK
+    // -----------------------------------------------------------------------
+    function updateMapAndReconstructionUI() {
+      // Update Room 1 Card & HUD Dot
+      if (gameState.fragment1Collected) {
+        document.getElementById("badge-room-1").textContent = "✓ Completed";
+        document.getElementById("badge-room-1").className = "absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 backdrop-blur-sm";
+        document.getElementById("btn-enter-room-1").textContent = "Review Room 1";
+        document.getElementById("prog-dot-1").className = "w-3 h-3 rounded-full bg-emerald-400 border border-emerald-300";
+
+        document.getElementById("frag-1-empty").classList.add("hidden");
+        document.getElementById("frag-1-filled").classList.remove("hidden");
+        document.getElementById("slot-frag-1").classList.remove("border-dashed", "border-slate-700");
+        document.getElementById("slot-frag-1").classList.add("border-solid", "border-teal-500/50");
+      }
+
+      // Update Room 2 Card & HUD Dot
+      if (gameState.fragment2Collected) {
+        document.getElementById("badge-room-2").textContent = "✓ Completed";
+        document.getElementById("badge-room-2").className = "absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 backdrop-blur-sm";
+        document.getElementById("btn-enter-room-2").textContent = "Review Room 2";
+        document.getElementById("prog-dot-2").className = "w-3 h-3 rounded-full bg-emerald-400 border border-emerald-300";
+
+        document.getElementById("frag-2-empty").classList.add("hidden");
+        document.getElementById("frag-2-filled").classList.remove("hidden");
+        document.getElementById("slot-frag-2").classList.remove("border-dashed", "border-slate-700");
+        document.getElementById("slot-frag-2").classList.add("border-solid", "border-teal-500/50");
+      }
+
+      // Fragment count & Reconstruction state
+      const fragCount = (gameState.fragment1Collected ? 1 : 0) + (gameState.fragment2Collected ? 1 : 0);
+      document.getElementById("fragment-count-badge").textContent = `${fragCount} / 2 Fragments Collected`;
+
+      // Only reveal reconstructed document and accessible text clue once BOTH fragments are collected
+      if (gameState.fragment1Collected && gameState.fragment2Collected) {
+        document.getElementById("fragments-incomplete-view").classList.add("hidden");
+        document.getElementById("fragments-reconstructed-view").classList.remove("hidden");
+      } else {
+        document.getElementById("fragments-incomplete-view").classList.remove("hidden");
+        document.getElementById("fragments-reconstructed-view").classList.add("hidden");
+      }
+
+      // Room 3 Unlocked State
+      if (gameState.room3Unlocked) {
+        document.getElementById("badge-room-3").textContent = "🔓 Unlocked";
+        document.getElementById("badge-room-3").className = "absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 border border-amber-400/40 text-amber-300 backdrop-blur-sm";
+
+        const btn3 = document.getElementById("btn-enter-room-3");
+        btn3.disabled = false;
+        btn3.textContent = "Enter Room 3 (Final Challenge)";
+        btn3.className = "w-full py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-sm shadow-lg transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400";
+
+        document.getElementById("keypad-status-pill").textContent = "Unlocked";
+        document.getElementById("keypad-status-pill").className = "text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+      }
+
+      // Overall Progress Bar
+      const roomsCleared = (gameState.fragment1Collected ? 1 : 0) + (gameState.fragment2Collected ? 1 : 0) + (gameState.q3_1_solved ? 1 : 0);
+      document.getElementById("map-progress-text").textContent = `${roomsCleared} of 3 Rooms Cleared`;
+      document.getElementById("map-progress-bar").style.width = `${Math.round((roomsCleared / 3) * 100)}%`;
+    }
+
+    function submitDoorCode(event) {
+      event.preventDefault();
+      const inputEl = document.getElementById("keypad-input");
+      const feedbackEl = document.getElementById("keypad-feedback");
+      const entered = inputEl.value.trim();
+
+      if (gameState.room3Unlocked) {
+        enterRoom(3);
+        return;
+      }
+
+      // Prevent unlocking before both fragments are collected
+      if (!gameState.fragment1Collected || !gameState.fragment2Collected) {
+        feedbackEl.className = "mt-3 text-xs text-center text-amber-300";
+        feedbackEl.textContent = "You must recover both document fragments from Rooms 1 and 2 before unlocking Room 3.";
+        return;
+      }
+
+      if (entered === CORRECT_DOOR_CODE) {
+        gameState.room3Unlocked = true;
+        playSoundEffect("audio-unlock");
+        showToast("Access Code 4217 Accepted! Room 3 is now unlocked.", "success");
+
+        feedbackEl.className = "mt-3 text-xs text-center text-emerald-400 font-semibold";
+        feedbackEl.textContent = "Code verified! Operating Theatre blast doors unsealed.";
+        inputEl.disabled = true;
+        document.getElementById("btn-unlock-room3").textContent = "Enter Room 3 →";
+
+        updateMapAndReconstructionUI();
+      } else {
+        playSoundEffect("audio-incorrect");
+        feedbackEl.className = "mt-3 text-xs text-center text-rose-400 font-semibold";
+        feedbackEl.textContent = "Invalid 4-digit code. Inspect the joined document fragments closely.";
+        inputEl.value = "";
+        inputEl.focus();
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // ROOM 3 CHALLENGE (Q3.1 Short Text Answer -> Completion Screen)
+    // -----------------------------------------------------------------------
+    function checkQ3_1(event) {
+      event.preventDefault();
+      if (gameState.q3_1_solved) return;
+
+      const rawAnswer = document.getElementById("q3-1-input").value.trim().toLowerCase();
+      const feedbackEl = document.getElementById("feedback-3-1");
+      feedbackEl.classList.remove("hidden");
+
+      if (!rawAnswer) {
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-amber-950/70 border border-amber-500/40 text-amber-200";
+        feedbackEl.textContent = "Please enter the two-word clinical condition before submitting.";
+        return;
+      }
+
+      // Normalize whitespace and accept "cardiac tamponade" or "pericardial tamponade"
+      const normalized = rawAnswer.replace(/\s+/g, " ");
+      const isCorrect = (normalized === "cardiac tamponade" || normalized === "pericardial tamponade");
+
+      if (isCorrect) {
+        gameState.q3_1_solved = true;
+        gameState.gameEnded = true;
+        clearInterval(gameState.timerInterval);
+
+        playSoundEffect("audio-correct");
+        document.getElementById("prog-dot-3").className = "w-3 h-3 rounded-full bg-emerald-400 border border-emerald-300";
+
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-emerald-950/70 border border-emerald-500/50 text-emerald-200";
+        feedbackEl.innerHTML = `<strong>You escaped!</strong> <strong>Cardiac tamponade</strong> occurs when fluid or blood accumulates in the inelastic fibrous pericardium, compressing the heart chambers and reducing cardiac output.`;
+
+        document.getElementById("q3-1-input").disabled = true;
+        document.getElementById("btn-submit-3-1").disabled = true;
+
+        // Populate Completion Screen Summary and transition smoothly
+        document.getElementById("summary-time").textContent = formatTime(gameState.timeRemaining);
+        document.getElementById("summary-life").textContent = `${gameState.life} HP`;
+
+        setTimeout(() => {
+          showScreen("complete");
+        }, 2200);
+      } else {
+        feedbackEl.className = "mt-4 p-4 rounded-xl text-sm leading-relaxed bg-rose-950/70 border border-rose-500/50 text-rose-200";
+        feedbackEl.innerHTML = `<strong>Incorrect (-10 HP).</strong> Check your spelling and recall the specific two-word clinical condition where fluid/blood inside the pericardial sac compresses the heart.`;
+        deductLifePoints();
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // FULL GAME RESET (Timer, Life Points, Clues, Questions, Progression)
+    // -----------------------------------------------------------------------
+    function restartGame() {
+      clearInterval(gameState.timerInterval);
+
+      gameState = {
+        timeRemaining: STARTING_TIME_SECONDS,
+        timerInterval: null,
+        life: STARTING_LIFE,
+        isMuted: gameState.isMuted,
+        audioActivated: gameState.audioActivated,
+        gameStarted: true,
+        gameEnded: false,
+        q1_1_solved: false,
+        q1_2_solved: false,
+        q2_1_solved: false,
+        q2_2_solved: false,
+        q3_1_solved: false,
+        fragment1Collected: false,
+        fragment2Collected: false,
+        room3Unlocked: false,
+        currentSequence: INITIAL_SEQUENCE_ITEMS.map(item => ({ ...item }))
+      };
+
+      // Reset HUD
+      const timerEl = document.getElementById("hud-timer");
+      const timerBadge = document.getElementById("timer-badge");
+      timerEl.textContent = "20:00";
+      timerEl.className = "font-mono-code font-bold text-sm sm:text-base text-amber-300";
+      timerBadge.className = "flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80";
+
+      const lifeEl = document.getElementById("hud-life");
+      const lifeBadge = document.getElementById("life-badge");
+      lifeEl.textContent = "100 HP";
+      lifeEl.className = "font-mono-code font-bold text-sm sm:text-base text-emerald-400";
+      lifeBadge.className = "flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80";
+
+      ["prog-dot-1", "prog-dot-2", "prog-dot-3"].forEach(id => {
+        document.getElementById(id).className = "w-3 h-3 rounded-full bg-slate-700 border border-slate-600 transition-colors";
+      });
+
+      // Reset Room 1 UI
+      document.querySelectorAll('input[name="q1_1"]').forEach(cb => {
+        cb.checked = false;
+        cb.disabled = false;
+      });
+      document.getElementById("q1-1-status").textContent = "Unsolved";
+      document.getElementById("q1-1-status").className = "text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400";
+      document.getElementById("btn-submit-1-1").disabled = false;
+      document.getElementById("btn-submit-1-1").classList.remove("opacity-50", "cursor-not-allowed");
+      document.getElementById("feedback-1-1").classList.add("hidden");
+
+      ["q1-2-d1", "q1-2-d2", "q1-2-d3"].forEach(id => {
+        const el = document.getElementById(id);
+        el.value = "";
+        el.disabled = false;
+      });
+      document.getElementById("q1-2-status").textContent = "Unsolved";
+      document.getElementById("q1-2-status").className = "text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400";
+      document.getElementById("btn-submit-1-2").disabled = false;
+      document.getElementById("btn-submit-1-2").classList.remove("opacity-50", "cursor-not-allowed");
+      document.getElementById("feedback-1-2").classList.add("hidden");
+      document.getElementById("room-1-reward").classList.add("hidden");
+
+      // Reset Room 2 UI
+      renderSequenceList();
+      document.getElementById("q2-1-status").textContent = "Unsolved";
+      document.getElementById("q2-1-status").className = "text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400";
+      document.getElementById("btn-submit-2-1").disabled = false;
+      document.getElementById("btn-submit-2-1").classList.remove("opacity-50", "cursor-not-allowed");
+      document.getElementById("feedback-2-1").classList.add("hidden");
+
+      ["match-1", "match-2", "match-3", "match-4"].forEach(id => {
+        const el = document.getElementById(id);
+        el.value = "";
+        el.disabled = false;
+      });
+      document.getElementById("q2-2-status").textContent = "Unsolved";
+      document.getElementById("q2-2-status").className = "text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400";
+      document.getElementById("btn-submit-2-2").disabled = false;
+      document.getElementById("btn-submit-2-2").classList.remove("opacity-50", "cursor-not-allowed");
+      document.getElementById("feedback-2-2").classList.add("hidden");
+      document.getElementById("room-2-reward").classList.add("hidden");
+
+      // Reset Room 3 & Keypad UI
+      const keypadInput = document.getElementById("keypad-input");
+      keypadInput.value = "";
+      keypadInput.disabled = false;
+      document.getElementById("btn-unlock-room3").textContent = "Unlock Room 3";
+      document.getElementById("keypad-feedback").textContent = "";
+      document.getElementById("keypad-status-pill").textContent = "Locked";
+      document.getElementById("keypad-status-pill").className = "text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30";
+
+      const btn3 = document.getElementById("btn-enter-room-3");
+      btn3.disabled = true;
+      btn3.textContent = "Locked — Requires 4-Digit Code";
+      btn3.className = "w-full py-3 px-4 rounded-xl bg-slate-800 text-slate-500 border border-slate-700 font-semibold text-sm cursor-not-allowed transition";
+
+      document.getElementById("badge-room-1").textContent = "Accessible";
+      document.getElementById("badge-room-1").className = "absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-teal-500/20 border border-teal-400/40 text-teal-300 backdrop-blur-sm";
+      document.getElementById("btn-enter-room-1").textContent = "Enter Room 1";
+
+      document.getElementById("badge-room-2").textContent = "Accessible";
+      document.getElementById("badge-room-2").className = "absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-teal-500/20 border border-teal-400/40 text-teal-300 backdrop-blur-sm";
+      document.getElementById("btn-enter-room-2").textContent = "Enter Room 2";
+
+      document.getElementById("badge-room-3").textContent = "🔒 Locked";
+      document.getElementById("badge-room-3").className = "absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/20 border border-rose-500/40 text-rose-300 backdrop-blur-sm";
+
+      document.getElementById("frag-1-empty").classList.remove("hidden");
+      document.getElementById("frag-1-filled").classList.add("hidden");
+      document.getElementById("slot-frag-1").className = "rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950/60 p-4 flex flex-col items-center justify-center min-h-[180px] text-center";
+
+      document.getElementById("frag-2-empty").classList.remove("hidden");
+      document.getElementById("frag-2-filled").classList.add("hidden");
+      document.getElementById("slot-frag-2").className = "rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950/60 p-4 flex flex-col items-center justify-center min-h-[180px] text-center";
+
+      const q3Input = document.getElementById("q3-1-input");
+      q3Input.value = "";
+      q3Input.disabled = false;
+      document.getElementById("btn-submit-3-1").disabled = false;
+      document.getElementById("feedback-3-1").classList.add("hidden");
+
+      // Hide all hints
+      ["hint-1-1", "hint-1-2", "hint-2-1", "hint-2-2", "hint-3-1"].forEach(id => {
+        document.getElementById(id).classList.add("hidden");
+      });
+
+      updateMapAndReconstructionUI();
+      startTimer();
+      showScreen("map");
+      showToast("Mission restarted. Timer and vitals reset.", "info");
+    }
+  </script>
+</body>
+</html>
